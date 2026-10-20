@@ -35,15 +35,29 @@ const endings = {
   cut: { text: 'You cut through the vines and free Eevee. The gleaming knife frightens it, and it darts away—but at least it’s safe.', trust: -1 },
   untangle: { text: 'One vine at a time, you patiently free Eevee. It takes a while, but Eevee relaxes and leans into your hand.', trust: 2 }
 };
+// New choices and scenes mirror the latest Python adventure.
+story.psyduck.choices.push(['Use SPARK', 'Make a friendly light show for Psyduck.', 'spark']);
+story.ledge.choices.push(['Use GLOW', 'Let your partner’s tail reveal a safe path.', 'glow']);
+story.bulbasaur.choices[0][2] = 'gap';
+story.gap = { place: 'A gap in the trail', title: 'A way across.', text: '', choices: [['Continue following the tracks', 'Eevee is just ahead.', 'branch']] };
+endings.spark = { text: 'Pikachu sends tiny sparks into the air. Psyduck enjoys the light show and helps you reach Eevee!', trust: 1 };
+endings.glow = { text: 'Charmander raises its glowing tail. The light reveals a safe trail to the ledge. You guide Eevee back!', trust: 1 };
+endings.offer.consume = 'berry';
+
 let state;
 const game = document.querySelector('#game');
 const $ = id => document.getElementById(id);
-function reset() { state = { step: 0, backpack: [], partner: null, trust: 1, node: null }; render(); }
+function reset() { state = { step: 0, backpack: [], partner: null, nickname: '', trust: 1, node: null, berryMessage: '' }; render(); }
+function partnerName() { return state.nickname || partners.find(p => p.id === state.partner)?.name || ''; }
+// Nicknames are player input, so escape them before inserting into HTML.
+function escapeHTML(text) { return text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function personalize(text) { return escapeHTML(text.replace(/Pikachu|Charmander|Bulbasaur/g, () => partnerName())); }
 function journal() {
   $('inventory').textContent = state.backpack.length ? state.backpack.map(x => supplies.find(s => s.id === x)?.name || x).join(' · ') : 'Nothing packed yet';
-  $('partner').textContent = partners.find(p => p.id === state.partner)?.name || 'A friend awaits';
-  $('location').textContent = state.step === 3 ? 'Safely out of the woods' : story[state.node]?.place || 'The edge of the woods';
-  $('trust').textContent = '♥'.repeat(state.trust) + '♡'.repeat(3 - state.trust) + ' · ' + (state.trust >= 3 ? 'A new best friend' : state.trust === 0 ? 'Still nervous' : 'A little unsure');
+  $('partner').textContent = partnerName() || 'A friend awaits';
+  $('location').textContent = state.step >= 3 ? 'Safely out of the woods' : story[state.node]?.place || 'The edge of the woods';
+  const hearts = Math.max(0, Math.min(3, state.trust));
+  $('trust').textContent = '♥'.repeat(hearts) + '♡'.repeat(3 - hearts) + ' · ' + (state.trust >= 3 ? 'A new best friend' : state.trust === 0 ? 'Still nervous' : 'A little unsure');
   for (let i = 0; i < 3; i++) { $('step' + i).classList.toggle('active', i === Math.min(state.step, 2)); if (i === Math.min(state.step, 2)) $('step' + i).setAttribute('aria-current', 'step'); else $('step' + i).removeAttribute('aria-current'); }
 }
 function cards(items, selected) {
@@ -62,32 +76,51 @@ function render() {
     });
     $('continue').onclick = () => { state.step = 1; render(); focusTitle(); };
   } else if (state.step === 1) {
-    game.innerHTML = '<h2>Every explorer needs a friend.</h2><p class="description">Choose your Pokémon partner. Each one leads you down a different path.</p>' + cards(partners, [state.partner]) + `<div class="action-row"><button class="text-button" id="back">← Repack your bag</button><button class="primary" id="continue" ${!state.partner ? 'disabled' : ''}>Into the woods &nbsp; →</button></div>`;
+    game.innerHTML = '<h2>Every explorer needs a friend.</h2><p class="description">Choose your Pokémon partner. Each one leads you down a different path.</p>' + cards(partners, [state.partner]) + `<div class="nickname-field"><label for="nickname">Name your Pokémon <span>(optional)</span></label><input id="nickname" type="text" value="${escapeHTML(state.nickname)}" placeholder="Leave blank to use its species name" maxlength="60" autocomplete="off"></div><div class="action-row"><button class="text-button" id="back">← Repack your bag</button><button class="primary" id="continue" ${!state.partner ? 'disabled' : ''}>Into the woods &nbsp; →</button></div>`;
+    $('nickname').oninput = () => { state.nickname = $('nickname').value; journal(); };
     document.querySelectorAll('.card').forEach(btn => btn.onclick = () => { state.partner = btn.dataset.id; render(); document.querySelector(`[data-id="${state.partner}"]`).focus(); });
     $('back').onclick = () => { state.step = 0; render(); focusTitle(); };
-    $('continue').onclick = () => { state.step = 2; state.node = state.partner; render(); focusTitle(); };
+    $('continue').onclick = () => { state.nickname = state.nickname.trim(); if (state.nickname) state.nickname = state.nickname.charAt(0).toUpperCase() + state.nickname.slice(1).toLowerCase(); state.step = 2; state.node = state.partner; render(); focusTitle(); };
   } else if (state.step === 2) {
     const scene = story[state.node];
-    game.innerHTML = `<h2>${scene.title}</h2><p class="description">${scene.text}</p><div class="choices">` + scene.choices.map(([label, detail, next, required]) => {
+    const text = state.node === 'gap' ? (state.backpack.includes('rope') ? 'You follow the footprints to a gap in the trail. You secure your rope around a tree and cross safely.' : 'You follow the footprints to a gap in the trail. You didn’t pack a rope, but Bulbasaur has an idea! Bulbasaur stretches its vines across the gap. You hold onto the vines and cross safely!') : scene.text;
+    game.innerHTML = `<h2>${scene.title}</h2><p class="description">${personalize(text)}</p><div class="choices">` + scene.choices.map(([label, detail, next, required]) => {
       const locked = required && !state.backpack.includes(required);
-      return `<button class="choice" data-next="${next}" ${locked ? 'disabled' : ''}><span><strong>${label}</strong><small>${locked ? 'You didn’t pack a ' + required + '. Try the other path.' : detail}</small></span><span aria-hidden="true">${locked ? '⊘' : '→'}</span></button>`;
+      return `<button class="choice" data-next="${next}" ${locked ? 'disabled' : ''}><span><strong>${label}</strong><small>${locked ? 'You didn’t pack a ' + required + '. Try another choice.' : personalize(detail)}</small></span><span aria-hidden="true">${locked ? '⊘' : '→'}</span></button>`;
     }).join('') + '</div>';
     document.querySelectorAll('.choice').forEach(btn => btn.onclick = () => choose(btn.dataset.next));
+  } else if (state.step === 3) {
+    game.innerHTML = `<h2>A little snack. A little trust.</h2><p class="description">${personalize(endings[state.node].text)}</p><p class="description">Before you leave, Eevee sniffs the berry in your backpack. Will you share it?</p><div class="choices"><button class="choice" id="feed"><span><strong>Feed Eevee</strong><small>Use your berry and gain two trust points.</small></span><span aria-hidden="true">→</span></button><button class="choice" id="keep"><span><strong>Keep the berry</strong><small>Save it for another adventure.</small></span><span aria-hidden="true">→</span></button></div>`;
+    $('feed').onclick = () => finishBerry(true);
+    $('keep').onclick = () => finishBerry(false);
   } else {
     const ending = endings[state.node];
     const message = state.trust >= 3 ? 'Eevee nuzzles your hand and follows you home. You gained a new Pokémon companion!' : state.trust >= 1 ? 'Eevee gives a happy cry before returning to the woods. A little kindness goes a long way.' : 'Eevee hurries into the bushes. Perhaps next time, be gentler.';
-    game.innerHTML = `<div class="result"><p class="eyebrow">✦ RESCUE COMPLETE</p><h2>A little hero. A happy ending.</h2><p>${ending.text}</p><p class="ending">${message}</p></div><div class="action-row"><span class="count">There’s another path waiting for you.</span><button class="primary" id="again">Play again &nbsp; ↻</button></div>`;
+    game.innerHTML = `<div class="result"><p class="eyebrow">✦ RESCUE COMPLETE</p><h2>A little hero. A happy ending.</h2><p>${personalize(ending.text)}</p>${state.berryMessage ? `<p>${state.berryMessage}</p>` : ''}<p class="ending">${message}</p><p>You and ${escapeHTML(partnerName())} make a great team!</p></div><div class="action-row"><span class="count">There’s another path waiting for you.</span><button class="primary" id="again">Play again &nbsp; ↻</button></div>`;
     $('again').onclick = () => { reset(); focusTitle(); };
   }
 }
 function choose(next) {
+  const choice = story[state.node]?.choices.find(choice => choice[2] === next);
+  if (!choice || (choice[3] && !state.backpack.includes(choice[3]))) return;
   if (endings[next]) {
     const result = endings[next];
     state.trust += result.trust || 0;
     if (result.item) state.backpack.push(result.item);
-    state.step = 3;
+    if (result.consume) state.backpack = state.backpack.filter(item => item !== result.consume);
+    state.step = state.backpack.includes('berry') ? 3 : 4;
   }
   state.node = next; render(); focusTitle();
+}
+function finishBerry(feed) {
+  if (state.step !== 3) return;
+  if (feed) {
+    state.backpack = state.backpack.filter(item => item !== 'berry');
+    state.trust += 2;
+    state.berryMessage = 'Eevee happily eats the berry and lets you scratch behind its ears!';
+  } else state.berryMessage = 'You save the berry for another adventure.';
+  state.step = 4;
+  render(); focusTitle();
 }
 function focusTitle() { const h = game.querySelector('h2'); h.tabIndex = -1; h.focus({ preventScroll: true }); }
 $('restart').onclick = () => { reset(); focusTitle(); };

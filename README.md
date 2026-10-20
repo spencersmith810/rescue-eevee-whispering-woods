@@ -2,6 +2,22 @@
 
 A responsive browser adaptation of `../provept2.py`. Open `dist/index.html` to play, or serve `dist` with `python3 -m http.server 8000 --directory dist`.
 
+## Play online
+
+https://spencersmith810.github.io/rescue-eevee-whispering-woods/
+
+## Publish updates to GitHub Pages
+
+From this folder, save your changes and run:
+
+```sh
+git add dist
+git commit -m "Update the game"
+sh publish-github.sh
+```
+
+The `github` remote stores the source on `main`. The publish script also sends the contents of `dist/` to the `gh-pages` branch, which GitHub Pages hosts automatically. Keep editing the files in `dist/`; the script handles the hosting branch.
+
 ## How the files fit together
 
 - `dist/index.html`: page layout and forest illustration.

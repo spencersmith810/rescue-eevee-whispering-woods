@@ -23,6 +23,11 @@ The `github` remote stores the source on `main`. The publish script also sends t
 - `dist/index.html`: page layout and forest illustration.
 - `dist/style.css`: colors, typography, and mobile layout.
 - `dist/game.js`: inventory, partner selection, branching scenes, and trust endings.
+- `dist/pokemon-art.js`: editable SVG Pokémon drawings and the adventure scene.
+
+The partner cards feature Pikachu, Charmander, and Bulbasaur drawings. During the adventure, your partner and Eevee appear in a scene with a river, hillside, or woodland background. CSS animates their idle bounce, blinking, Charmander's flame, and the rescue heart. Change the `@keyframes` rules at the end of `dist/style.css` to experiment with movement. Reduced-motion preferences disable the animations.
+
+At the finished ending, trust of 3 or more evolves Eevee into Jolteon with Pikachu, Flareon with Charmander, or Leafeon with Bulbasaur, matching the Python game. Any final berry choice happens first. The final scene shows a matching SVG evolution drawing with a gentle glow reveal. Lower trust keeps Eevee unevolved. `endingEvolution()` in `game.js` controls this rule; the drawings live in `pokemon-art.js`.
 
 `state` replaces the Python variables. `story` stores each scene and its choices; `endings` stores each rescue outcome. `render()` draws the current scene, and `choose()` advances the story.
 

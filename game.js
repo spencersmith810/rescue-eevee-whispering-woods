@@ -49,6 +49,11 @@ const game = document.querySelector('#game');
 const $ = id => document.getElementById(id);
 function reset() { state = { step: 0, backpack: [], partner: null, nickname: '', trust: 1, node: null, berryMessage: '' }; render(); }
 function partnerName() { return state.nickname || partners.find(p => p.id === state.partner)?.name || ''; }
+// Match the Python ending: evolution needs three trust points and a finished rescue.
+function endingEvolution() {
+  if (state.step !== 4 || state.trust < 3) return null;
+  return { pikachu: 'Jolteon', charmander: 'Flareon', bulbasaur: 'Leafeon' }[state.partner] || null;
+}
 // Nicknames are player input, so escape them before inserting into HTML.
 function escapeHTML(text) { return text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function personalize(text) { return escapeHTML(text.replace(/Pikachu|Charmander|Bulbasaur/g, () => partnerName())); }
@@ -61,7 +66,7 @@ function journal() {
   for (let i = 0; i < 3; i++) { $('step' + i).classList.toggle('active', i === Math.min(state.step, 2)); if (i === Math.min(state.step, 2)) $('step' + i).setAttribute('aria-current', 'step'); else $('step' + i).removeAttribute('aria-current'); }
 }
 function cards(items, selected) {
-  return '<div class="cards">' + items.map(i => `<button class="card ${selected.includes(i.id) ? 'selected' : ''}" data-id="${i.id}" aria-pressed="${selected.includes(i.id)}"><span class="check">${selected.includes(i.id) ? '✓' : ''}</span><span class="icon" aria-hidden="true">${i.icon}</span><strong>${i.name}</strong><small>${i.detail}</small></button>`).join('') + '</div>';
+  return '<div class="cards">' + items.map(i => `<button class="card ${selected.includes(i.id) ? 'selected' : ''}" data-id="${i.id}" aria-pressed="${selected.includes(i.id)}"><span class="check">${selected.includes(i.id) ? '✓' : ''}</span><span class="icon" aria-hidden="true">${partners.some(p => p.id === i.id) ? pokemonArt(i.id) : i.icon}</span><strong>${i.name}</strong><small>${i.detail}</small></button>`).join('') + '</div>';
 }
 function render() {
   journal();
@@ -95,10 +100,13 @@ function render() {
     $('keep').onclick = () => finishBerry(false);
   } else {
     const ending = endings[state.node];
-    const message = state.trust >= 3 ? 'Eevee nuzzles your hand and follows you home. You gained a new Pokémon companion!' : state.trust >= 1 ? 'Eevee gives a happy cry before returning to the woods. A little kindness goes a long way.' : 'Eevee hurries into the bushes. Perhaps next time, be gentler.';
-    game.innerHTML = `<div class="result"><p class="eyebrow">✦ RESCUE COMPLETE</p><h2>A little hero. A happy ending.</h2><p>${personalize(ending.text)}</p>${state.berryMessage ? `<p>${state.berryMessage}</p>` : ''}<p class="ending">${message}</p><p>You and ${escapeHTML(partnerName())} make a great team!</p></div><div class="action-row"><span class="count">There’s another path waiting for you.</span><button class="primary" id="again">Play again &nbsp; ↻</button></div>`;
+    const evolution = endingEvolution();
+    const evolutionMessage = evolution ? `<div class="evolution-reveal"><p class="eyebrow">✦ A NEW EVOLUTION</p><p>A mysterious light surrounds Eevee…</p><p>Your bond with ${escapeHTML(partnerName())} helped Eevee evolve into <strong>${evolution}</strong>!</p></div>` : '';
+    const message = state.trust >= 3 ? `${evolution} nuzzles your hand and follows you home. You gained a new Pokémon companion!` : state.trust >= 1 ? 'Eevee gives a happy cry before returning to the woods. A little kindness goes a long way.' : 'Eevee hurries into the bushes. Perhaps next time, be gentler.';
+    game.innerHTML = `<div class="result"><p class="eyebrow">✦ RESCUE COMPLETE</p><h2>A little hero. A happy ending.</h2><p>${personalize(ending.text)}</p>${state.berryMessage ? `<p>${state.berryMessage}</p>` : ''}${evolutionMessage}<p class="ending">${message}</p><p>You and ${escapeHTML(partnerName())} make a great team!</p></div><div class="action-row"><span class="count">There’s another path waiting for you.</span><button class="primary" id="again">Play again &nbsp; ↻</button></div>`;
     $('again').onclick = () => { reset(); focusTitle(); };
   }
+  if (state.step >= 2) game.insertAdjacentHTML('afterbegin', pokemonScene());
 }
 function choose(next) {
   const choice = story[state.node]?.choices.find(choice => choice[2] === next);
